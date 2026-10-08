@@ -16,6 +16,12 @@ const EVENT_TIME = 12;  // seconds to answer an emergency
 
 const clamp = (v) => Math.max(0, Math.min(100, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
+const lerp = (a, b, f) => a + (b - a) * f;
+// f = 0 (easy start) -> 1 (hard end)
+const frac = (r, t) => (r.phase === 'lobby' ? 0 : Math.max(0, Math.min(1, (t - r.start) / (DURATION * 1000))));
+const priceMul = (f) => 1 + 0.4 * f;
+const priced = (fx, f) => { const o = { ...fx }; if (o.money < 0) o.money = -Math.round((-o.money * priceMul(f)) / 10) * 10; return o; };
+const scaled = (fx, k) => { const o = {}; for (const key in fx) o[key] = key === 'money' ? fx[key] : Math.round(fx[key] * k); return o; };
 
 // Always-available purchases. fx.money is the cost (negative) or gain.
 const ACTIONS = {
@@ -50,6 +56,9 @@ const EVENTS = [
   { id: 'factory', title: 'Gujarat Factory Boom!', desc: 'New plants bring jobs and tax revenue, and chimney smoke.',
     ignore: { air: -10, money: 100 },
     options: [{ label: 'Allow, collect taxes', fx: { money: 300, air: -15 } }, { label: 'Enforce green norms', fx: { money: -100, air: 5, eq: 3 } }] },
+  { id: 'tornado', title: 'Tornado Hits the Outskirts!', desc: 'A funnel cloud tears through the suburbs. Roofs fly, power lines fall.',
+    ignore: { infra: -25, eq: -6 },
+    options: [{ label: 'Emergency shelters', fx: { money: -250, infra: 10, eq: 4 } }, { label: 'Reinforce and rebuild', fx: { money: -150, infra: 12 } }] },
 ];
 
 const rooms = {};
@@ -74,14 +83,15 @@ function score(c) {
 }
 
 // Passive decay every TICK seconds. Load grows with sqrt of population ratio.
-function tick(c) {
+function tick(c, f) {
+  const dm = 0.6 + f; // decay is 0.6x at the start, 1.6x at the end
   c.pop = Math.round(c.pop * 1.05);
   const r = Math.sqrt(c.pop / 10000);
-  c.water = clamp(c.water - 0.6 * r);
-  c.infra = clamp(c.infra - 0.5 * r);
-  c.air = clamp(c.air - 0.35 * r * (1 + (100 - c.infra) / 100));
-  c.edu = clamp(c.edu - 0.2 * r);
-  c.eq = clamp(c.eq - 0.1 * r);
+  c.water = clamp(c.water - 0.6 * r * dm);
+  c.infra = clamp(c.infra - 0.5 * r * dm);
+  c.air = clamp(c.air - 0.35 * r * (1 + (100 - c.infra) / 100) * dm);
+  c.edu = clamp(c.edu - 0.2 * r * dm);
+  c.eq = clamp(c.eq - 0.1 * r * dm);
   c.money += Math.round(c.pop / 1000); // tax income
 }
 
@@ -96,42 +106,48 @@ const pub = (c, id) => ({
 
 const toast = (c, msg) => c.sock && io.to(c.sock).emit('toast', msg);
 
-function trigger(c, now) {
+function trigger(c, now, f) {
   const def = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-  c.event = { def, deadline: now + EVENT_TIME * 1000 };
+  const total = lerp(14, 9, f) * 1000; // less time to answer as the game goes on
+  c.event = { def, deadline: now + total, total };
 }
 
-function resolve(c, idx, now) {
+function resolve(c, idx, now, f) {
   const ev = c.event;
   if (!ev) return false;
+  let fx;
   if (idx === null) {
-    apply(c, ev.def.ignore);
+    fx = scaled(ev.def.ignore, 0.7 + 0.8 * f);
     toast(c, 'Too slow! ' + ev.def.title.replace('!', '') + ' hit your city.');
   } else {
     const o = ev.def.options[idx];
-    if (!o || c.money + (o.fx.money || 0) < 0) return false;
-    apply(c, o.fx);
+    if (!o) return false;
+    fx = priced(o.fx, f);
+    if (c.money + (fx.money || 0) < 0) return false;
     toast(c, o.label + ' done.');
   }
+  apply(c, fx);
+  if (c.sock) io.to(c.sock).emit('impact', fx);
   c.event = null;
-  c.nextEvent = now + rnd(7000, 15000);
+  c.nextEvent = now + rnd(lerp(10000, 4000, f), lerp(18000, 8000, f)); // events get more frequent
   return true;
 }
 
-function evPayload(c, now) {
+function evPayload(c, now, f) {
   if (!c.event) return null;
   const d = c.event.def;
-  return { id: d.id, title: d.title, desc: d.desc, ms: Math.max(0, c.event.deadline - now),
-    options: d.options.map((o) => ({ label: o.label, cost: -(o.fx.money || 0), fx: o.fx })) };
+  return { id: d.id, title: d.title, desc: d.desc, ms: Math.max(0, c.event.deadline - now), total: c.event.total,
+    options: d.options.map((o) => { const fx = priced(o.fx, f); return { label: o.label, cost: -(fx.money || 0), fx }; }) };
 }
 
 function broadcast(r, now) {
   const board = [...r.players].map(([id, c]) => pub(c, id)).sort((a, b) => b.score - a.score);
   const left = r.phase === 'running' ? Math.max(0, Math.round((r.end - now) / 1000)) : r.phase === 'ended' ? 0 : DURATION;
   io.to('h' + r.code).emit('board', { code: r.code, phase: r.phase, left, board });
+  const f = frac(r, now);
   board.forEach((b, i) => {
     const c = r.players.get(b.id);
-    if (c.sock) io.to(c.sock).emit('me', { phase: r.phase, left, me: b, rank: i + 1, n: board.length, event: evPayload(c, now) });
+    if (c.sock) io.to(c.sock).emit('me', { phase: r.phase, left, me: b, rank: i + 1, n: board.length, event: evPayload(c, now, f), lvl: Math.min(3, Math.floor(f * 3) + 1), pm: priceMul(f) });
   });
 }
 
@@ -144,11 +160,11 @@ setInterval(() => {
     if (r.phase === 'running') {
       while (now - r.lastTick >= TICK * 1000) {
         r.lastTick += TICK * 1000;
-        r.players.forEach(tick);
+        r.players.forEach((c) => tick(c, frac(r, r.lastTick)));
       }
       r.players.forEach((c) => {
-        if (c.event && now >= c.event.deadline) resolve(c, null, now);
-        else if (!c.event && now >= c.nextEvent) trigger(c, now);
+        if (c.event && now >= c.event.deadline) resolve(c, null, now, frac(r, now));
+        else if (!c.event && now >= c.nextEvent) trigger(c, now, frac(r, now));
       });
       if (now >= r.end) r.phase = 'ended';
     }
@@ -170,8 +186,8 @@ io.on('connection', (socket) => {
     const r = rooms[socket.data.host];
     if (!r || r.phase !== 'lobby') return;
     const now = Date.now();
-    r.phase = 'running'; r.end = now + DURATION * 1000; r.lastTick = now;
-    r.players.forEach((c) => { c.nextEvent = now + rnd(4000, 10000); });
+    r.phase = 'running'; r.start = now; r.end = now + DURATION * 1000; r.lastTick = now;
+    r.players.forEach((c) => { c.nextEvent = now + rnd(8000, 14000); });
     broadcast(r, now);
   });
 
@@ -184,7 +200,7 @@ io.on('connection', (socket) => {
     const id = name.toLowerCase();
     let c = r.players.get(id);
     if (c && c.sock && c.sock !== socket.id && io.sockets.sockets.has(c.sock)) return cb({ error: 'That name is taken. Pick another.' });
-    if (!c) { c = newCity(name); if (r.phase === 'running') c.nextEvent = Date.now() + rnd(4000, 10000); r.players.set(id, c); }
+    if (!c) { c = newCity(name); if (r.phase === 'running') c.nextEvent = Date.now() + rnd(8000, 14000); r.players.set(id, c); }
     c.sock = socket.id;
     socket.data.code = code; socket.data.pid = id;
     cb({ ok: true, actions: Object.entries(ACTIONS).map(([key, a]) => ({ key, label: a.label, cost: -(a.fx.money || 0), fx: a.fx })) });
@@ -199,8 +215,11 @@ io.on('connection', (socket) => {
 
   socket.on('player:action', (key) => {
     const x = ctx(); const a = ACTIONS[key];
-    if (!x || !a || x.c.money + a.fx.money < 0) return;
-    apply(x.c, a.fx);
+    if (!x || !a) return;
+    const fx = priced(a.fx, frac(x.r, Date.now()));
+    if (x.c.money + fx.money < 0) return;
+    apply(x.c, fx);
+    socket.emit('impact', fx);
     toast(x.c, a.label + ' done.');
     broadcast(x.r, Date.now());
   });
@@ -208,7 +227,7 @@ io.on('connection', (socket) => {
   socket.on('player:choose', (idx) => {
     const x = ctx();
     if (!x) return;
-    resolve(x.c, Number(idx), Date.now());
+    resolve(x.c, Number(idx), Date.now(), frac(x.r, Date.now()));
     broadcast(x.r, Date.now());
   });
 
