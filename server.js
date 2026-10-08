@@ -91,6 +91,7 @@ const pub = (c, id) => ({
   air: +c.air.toFixed(1), water: +c.water.toFixed(1), edu: +c.edu.toFixed(1),
   eq: +c.eq.toFixed(1), infra: +c.infra.toFixed(1),
   ev: c.event ? c.event.def.title : null,
+  evId: c.event ? c.event.def.id : null,
 });
 
 const toast = (c, msg) => c.sock && io.to(c.sock).emit('toast', msg);
