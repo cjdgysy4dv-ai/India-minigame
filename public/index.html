@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>India City Rush</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:'Bricolage Grotesque',system-ui,sans-serif;background:#0F1B2D;color:#EAF0F7}
+  .panel{background:#172640;border:1px solid #243A5E;border-radius:14px}
+  .btn{background:#F2A33A;color:#1A1204;font-weight:800;border-radius:10px;padding:.7rem 1rem;transition:transform .08s}
+  .btn:active{transform:scale(.97)}.btn:disabled{opacity:.35;cursor:not-allowed}
+  .opt{background:#243A5E;border-radius:10px;padding:.8rem 1rem;text-align:left;width:100%;transition:background .1s}
+  .opt:hover:not(:disabled){background:#2F4C7C}.opt:disabled{opacity:.4}
+  input{background:#0F1B2D;border:1px solid #2F4C7C;border-radius:10px;padding:.8rem 1rem;width:100%;font-size:1.1rem}
+  @keyframes pulse2{50%{box-shadow:0 0 0 6px rgba(228,87,46,.35)}}
+  .alert{animation:pulse2 1s infinite}
+  @media (prefers-reduced-motion:reduce){.alert{animation:none}}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ENTRY -->
+<main id="entry" class="max-w-3xl mx-auto p-6 pt-16">
+  <h1 class="text-5xl font-extrabold leading-tight">India City Rush</h1>
+  <p class="mt-3 text-slate-300 text-lg">Five minutes. Four crises. One city to keep alive.</p>
+  <div class="grid md:grid-cols-2 gap-5 mt-10">
+    <form id="joinForm" class="panel p-6 space-y-3">
+      <h2 class="text-xl font-bold">Join a game</h2>
+      <input id="jcode" maxlength="4" placeholder="Room code" class="uppercase tracking-widest" autocomplete="off">
+      <input id="jname" maxlength="16" placeholder="Your city name" autocomplete="off">
+      <button class="btn w-full" type="submit">Join game</button>
+      <p id="jerr" class="text-red-400 text-sm"></p>
+    </form>
+    <div class="panel p-6 flex flex-col justify-between">
+      <div><h2 class="text-xl font-bold">Presenting?</h2><p class="text-slate-300 mt-2">Open the projector dashboard and share the room code.</p></div>
+      <button id="hostBtn" class="btn mt-4">Host on projector</button>
+    </div>
+  </div>
+</main>
+
+<!-- HOST -->
+<main id="host" class="hidden p-5 max-w-7xl mx-auto">
+  <header class="flex flex-wrap items-center justify-between gap-4 mb-5">
+    <div>
+      <div class="text-slate-400 text-sm">Join at <span id="hurl" class="text-slate-200 font-semibold"></span> with code</div>
+      <div id="hcode" class="text-7xl font-extrabold tracking-widest text-amber-400 leading-none"></div>
+    </div>
+    <div class="text-right">
+      <div id="hphase" class="text-slate-300"></div>
+      <div id="htime" class="text-6xl font-extrabold tabular-nums">5:00</div>
+      <button id="startBtn" class="btn mt-2">Start the game</button>
+    </div>
+  </header>
+  <div class="grid lg:grid-cols-5 gap-5">
+    <section class="panel p-4 lg:col-span-3">
+      <h2 class="font-bold text-xl mb-3">Leaderboard <span id="hn" class="text-slate-400 font-normal text-base"></span></h2>
+      <div id="rows" class="space-y-1.5 max-h-[68vh] overflow-y-auto"></div>
+    </section>
+    <section class="panel p-4 lg:col-span-2">
+      <h2 class="font-bold text-xl mb-3">Spectator view</h2>
+      <div id="spec" class="text-slate-400">Click a city on the leaderboard to watch it live.</div>
+    </section>
+  </div>
+</main>
+
+<!-- PLAYER -->
+<main id="player" class="hidden max-w-xl mx-auto p-4 pb-10">
+  <div class="flex items-end justify-between mb-3">
+    <div><div id="pname" class="text-2xl font-extrabold"></div><div id="prank" class="text-slate-400 text-sm"></div></div>
+    <div class="text-right"><div class="text-slate-400 text-sm">Score</div><div id="pscore" class="text-4xl font-extrabold text-amber-400 tabular-nums">0</div></div>
+  </div>
+  <div class="flex justify-between items-center mb-3 panel px-4 py-2">
+    <div><span class="text-slate-400 text-sm">Budget</span> <span id="pmoney" class="text-xl font-extrabold text-amber-400"></span></div>
+    <div><span class="text-slate-400 text-sm">Population</span> <span id="ppop" class="font-bold"></span></div>
+    <div id="ptime" class="text-xl font-extrabold tabular-nums"></div>
+  </div>
+  <div id="pgauges" class="panel p-4 space-y-3"></div>
+  <h3 class="font-bold mt-5 mb-2">Invest now</h3>
+  <div id="pactions" class="grid grid-cols-2 gap-2"></div>
+  <div id="pwait" class="panel p-4 mt-4 text-center text-slate-300">Waiting for the host to start…</div>
+</main>
+
+<!-- EMERGENCY MODAL -->
+<div id="modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+  <div class="panel alert p-5 w-full max-w-md" style="border-color:#E4572E">
+    <h2 id="mtitle" class="text-2xl font-extrabold text-orange-400"></h2>
+    <p id="mdesc" class="text-slate-300 mt-1"></p>
+    <div class="h-2 bg-slate-700 rounded mt-3"><div id="mbar" class="h-2 rounded bg-orange-500" style="width:100%"></div></div>
+    <div id="mopts" class="space-y-2 mt-4"></div>
+  </div>
+</div>
+
+<!-- END SCREEN + TOAST -->
+<div id="end" class="hidden fixed inset-0 bg-[#0F1B2D] z-50 flex items-center justify-center p-6 text-center">
+  <div><div class="text-slate-400">Time's up</div><div id="endrank" class="text-7xl font-extrabold text-amber-400 my-2"></div>
+  <div id="endscore" class="text-2xl"></div><p class="text-slate-400 mt-4">Look at the projector for the final ranking.</p></div>
+</div>
+<div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-100 text-slate-900 font-semibold px-4 py-2 rounded-full opacity-0 transition-opacity z-[60]"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const socket = io();
+const qs = new URLSearchParams(location.search);
+const STATS = [['air', 'Air quality'], ['water', 'Water reserve'], ['edu', 'Education'], ['eq', 'Equality'], ['infra', 'Infrastructure']];
+const col = (v) => (v < 30 ? 'bg-red-500' : v < 55 ? 'bg-amber-400' : 'bg-teal-400');
+const gauge = (l, v) => `<div><div class="flex justify-between text-sm"><span>${l}</span><span class="font-bold">${Math.round(v)}</span></div><div class="h-3 bg-slate-700 rounded"><div class="h-3 rounded ${col(v)} transition-all duration-700" style="width:${v}%"></div></div></div>`;
+const fmt = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+const show = (v) => ['entry', 'host', 'player'].forEach((x) => $('#' + x).classList.toggle('hidden', x !== v));
+let role = null, actions = [], spectate = null, lastBoard = null, evDeadline = 0, evId = null, myMoney = 0;
+
+function toast(t) { const e = $('#toast'); e.textContent = t; e.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => (e.style.opacity = 0), 2200); }
+socket.on('toast', toast);
+
+/* ---------- connection / auto rejoin ---------- */
+socket.on('connect', () => {
+  if (role === 'host') startHost();
+  else if (role === 'player') joinGame(sessionStorage.jc, sessionStorage.jn, true);
+});
+if (qs.has('host')) startHost();
+if (qs.get('room')) $('#jcode').value = qs.get('room').toUpperCase();
+
+/* ---------- HOST ---------- */
+$('#hostBtn').onclick = startHost;
+function startHost() {
+  socket.emit('host:create', { code: sessionStorage.hostCode }, (r) => {
+    role = 'host'; sessionStorage.hostCode = r.code;
+    $('#hcode').textContent = r.code;
+    $('#hurl').textContent = location.host + '/?room=' + r.code;
+    show('host');
+  });
+}
+$('#startBtn').onclick = () => socket.emit('host:start');
+socket.on('board', (b) => { if (role !== 'host') return; lastBoard = b; renderHost(); });
+
+function renderHost() {
+  const b = lastBoard;
+  $('#hphase').textContent = b.phase === 'lobby' ? 'Waiting for players' : b.phase === 'running' ? 'Game in progress' : 'Final results';
+  $('#htime').textContent = fmt(b.left);
+  $('#startBtn').classList.toggle('hidden', b.phase !== 'lobby');
+  $('#startBtn').disabled = b.board.length === 0;
+  $('#hn').textContent = b.board.length + ' cities';
+  $('#rows').innerHTML = b.board.map((p, i) => `
+    <button data-id="${esc(p.id)}" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${spectate === p.id ? 'bg-[#2F4C7C]' : 'bg-[#1E3354] hover:bg-[#25406A]'}">
+      <span class="w-7 text-slate-400 font-bold">${i + 1}</span>
+      <span class="flex-1 font-semibold truncate ${p.connected ? '' : 'opacity-50'}">${esc(p.name)}${p.ev ? ' <span class="text-orange-400 text-xs">⚠ ' + esc(p.ev) + '</span>' : ''}</span>
+      <span class="text-xl font-extrabold text-amber-400 tabular-nums">${p.score.toFixed(1)}</span>
+    </button>`).join('');
+  document.querySelectorAll('#rows button').forEach((el) => (el.onclick = () => { spectate = el.dataset.id; renderHost(); }));
+  const p = b.board.find((x) => x.id === spectate);
+  if (p) $('#spec').innerHTML = `
+    <div class="flex justify-between mb-2"><b class="text-xl">${esc(p.name)}</b><span class="text-amber-400 font-extrabold text-xl">${p.score.toFixed(1)}</span></div>
+    <div class="space-y-2">${STATS.map(([k, l]) => gauge(l, p[k])).join('')}</div>
+    <div class="flex justify-between mt-3 text-sm"><span>Budget <b class="text-amber-400">$${p.money}</b></span><span>Population <b>${p.pop.toLocaleString()}</b></span></div>
+    ${p.ev ? `<div class="alert mt-3 p-2 rounded-lg bg-orange-900/50 text-orange-300 font-semibold">⚠ ${esc(p.ev)}</div>` : ''}
+    <pre class="mt-3 text-xs bg-[#0F1B2D] rounded-lg p-2 overflow-x-auto">${esc(JSON.stringify(p, null, 1))}</pre>`;
+}
+
+/* ---------- PLAYER ---------- */
+$('#joinForm').onsubmit = (e) => { e.preventDefault(); joinGame($('#jcode').value, $('#jname').value, false); };
+function joinGame(code, name, silent) {
+  socket.emit('player:join', { code, name }, (r) => {
+    if (r.error) { if (!silent) $('#jerr').textContent = r.error; else { role = null; show('entry'); } return; }
+    role = 'player'; sessionStorage.jc = code; sessionStorage.jn = name;
+    if (!actions.length) {
+      actions = r.actions;
+      $('#pactions').innerHTML = actions.map((a) => `<button class="opt" data-k="${a.key}"><div class="font-bold">${a.label}</div><div class="text-xs text-slate-300">${a.cost > 0 ? '-$' + a.cost : '+$' + -a.cost} · ${fxText(a.fx)}</div></button>`).join('');
+      document.querySelectorAll('#pactions button').forEach((b) => (b.onclick = () => socket.emit('player:action', b.dataset.k)));
+    }
+    show('player');
+  });
+}
+const NAMES = { air: 'Air', water: 'Water', edu: 'Edu', eq: 'Equal.', infra: 'Infra' };
+const fxText = (fx) => Object.keys(fx).filter((k) => k !== 'money').map((k) => NAMES[k] + ' ' + (fx[k] > 0 ? '+' : '') + fx[k]).join(', ');
+
+socket.on('me', (d) => {
+  if (role !== 'player') return;
+  const m = d.me; myMoney = m.money;
+  $('#pname').textContent = m.name;
+  $('#prank').textContent = 'Rank ' + d.rank + ' of ' + d.n;
+  $('#pscore').textContent = m.score.toFixed(1);
+  $('#pmoney').textContent = '$' + m.money;
+  $('#ppop').textContent = m.pop.toLocaleString();
+  $('#ptime').textContent = fmt(d.left);
+  $('#pgauges').innerHTML = STATS.map(([k, l]) => gauge(l, m[k])).join('');
+  $('#pwait').classList.toggle('hidden', d.phase !== 'lobby');
+  document.querySelectorAll('#pactions button').forEach((b, i) => (b.disabled = d.phase !== 'running' || myMoney < Math.max(0, actions[i].cost)));
+  // emergency modal: rebuild only when a new event arrives so taps are never lost
+  if (d.event && d.phase === 'running') {
+    if (evId !== d.event.id) {
+      evId = d.event.id;
+      $('#mtitle').textContent = d.event.title;
+      $('#mdesc').textContent = d.event.desc;
+      $('#mopts').innerHTML = d.event.options.map((o, i) => `<button class="opt" data-i="${i}" data-c="${o.cost}"><div class="font-bold">${esc(o.label)}</div><div class="text-xs text-slate-300">${o.cost > 0 ? '-$' + o.cost : '+$' + -o.cost} · ${fxText(o.fx)}</div></button>`).join('');
+      document.querySelectorAll('#mopts button').forEach((b) => (b.onclick = () => socket.emit('player:choose', b.dataset.i)));
+    }
+    evDeadline = Date.now() + d.event.ms;
+    document.querySelectorAll('#mopts button').forEach((b) => (b.disabled = myMoney < Math.max(0, +b.dataset.c)));
+    $('#modal').classList.remove('hidden');
+  } else { evId = null; $('#modal').classList.add('hidden'); }
+  if (d.phase === 'ended') {
+    $('#modal').classList.add('hidden');
+    $('#endrank').textContent = '#' + d.rank + ' of ' + d.n;
+    $('#endscore').textContent = 'Final score ' + m.score.toFixed(1) + ' / 100';
+    $('#end').classList.remove('hidden');
+  }
+});
+setInterval(() => { if (evId) $('#mbar').style.width = Math.max(0, Math.min(100, ((evDeadline - Date.now()) / 12000) * 100)) + '%'; }, 100);
+</script>
+</body>
+</html>
