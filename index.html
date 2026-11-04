@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>India City Rush</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  body{font-family:'Bricolage Grotesque',system-ui,sans-serif;background:#0F1B2D;color:#EAF0F7;overflow-x:hidden}
+  #c{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:none}
+  #tint{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0}
+  .panel{background:rgba(15,27,45,.82);backdrop-filter:blur(6px);border:1px solid #2A4268;border-radius:14px}
+  .btn{background:#F2A33A;color:#1A1204;font-weight:800;border-radius:10px;padding:.7rem 1rem}
+  .btn:active{transform:scale(.97)}.btn:disabled{opacity:.35;cursor:not-allowed}
+  .opt{background:#243A5E;border-radius:10px;padding:.7rem 1rem;text-align:left;width:100%}
+  .opt:hover:not(:disabled){background:#2F4C7C}.opt:disabled{opacity:.4}
+  input{background:#0F1B2D;border:1px solid #2F4C7C;border-radius:10px;padding:.8rem 1rem;width:100%;font-size:1.1rem}
+  .view{position:fixed;inset:0;z-index:10;pointer-events:none}.view>*{pointer-events:auto}
+  #labels{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .lbl{position:fixed;transform:translate(-50%,-100%);background:rgba(15,27,45,.88);border:1px solid #2F4C7C;border-radius:10px;padding:3px 8px;font-size:11px;line-height:1.25;text-align:center;white-space:nowrap;pointer-events:auto;cursor:pointer;color:#EAF0F7;min-width:96px}
+  .lbl b{display:block;font-size:12px}.lbl em{font-style:normal;color:#F2A33A}
+  .lbl i{display:block;height:5px;background:#243A5E;border-radius:3px;margin:2px 0}.lbl u{display:block;height:5px;border-radius:3px;background:#2DD4BF}
+  .lbl .c{color:#F2A33A;font-weight:800}.lbl.dim{opacity:.5}.lbl.max{border-color:#F2A33A}
+  .lbl.hot{border-color:#E4572E;animation:glow 1s infinite}.lbl .ld.bad{color:#F87171;font-weight:800}
+  @keyframes glow{50%{box-shadow:0 0 14px 3px #E4572E}}
+  #tip{position:fixed;z-index:40;pointer-events:none;display:none;max-width:270px;padding:.6rem .8rem;font-size:13px}
+  #chips{position:fixed;left:50%;top:38%;transform:translateX(-50%);z-index:30;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .chip{font-weight:800;font-size:1.7rem;text-shadow:0 2px 8px #000;animation:up 2.2s ease-out forwards}
+  .chip.up,.g{color:#4ADE80}.chip.down,.r{color:#F87171}
+  @keyframes up{from{transform:translateY(0);opacity:1}to{transform:translateY(-70px);opacity:0}}
+  .pop{position:fixed;font-weight:800;font-size:13px;text-shadow:0 1px 4px #000;pointer-events:none;z-index:25;white-space:nowrap;animation:up2 2.4s ease-out forwards}
+  @keyframes up2{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-50px)}}
+  @media (prefers-reduced-motion:reduce){.chip,.pop,.lbl.hot{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas><div id="tint"></div><div id="labels" style="display:none"></div><div id="chips"></div><div id="tip" class="panel"></div>
+
+<!-- ENTRY -->
+<main id="entry" class="max-w-3xl mx-auto p-6 pt-16 relative z-10">
+  <h1 class="text-5xl font-extrabold leading-tight">India City Rush</h1>
+  <p class="mt-3 text-slate-300 text-lg">Five minutes. A booming population. One city that must keep up.</p>
+  <div class="grid md:grid-cols-2 gap-5 mt-10">
+    <form id="joinForm" class="panel p-6 space-y-3">
+      <h2 class="text-xl font-bold">Join a game</h2>
+      <input id="jcode" maxlength="4" placeholder="Room code" class="uppercase tracking-widest" autocomplete="off">
+      <input id="jname" maxlength="16" placeholder="Your city name" autocomplete="off">
+      <button class="btn w-full" type="submit">Join game</button>
+      <p id="jerr" class="text-red-400 text-sm"></p>
+    </form>
+    <div class="panel p-6 flex flex-col justify-between">
+      <div><h2 class="text-xl font-bold">Presenting?</h2><p class="text-slate-300 mt-2">Open the projector dashboard and share the room code.</p></div>
+      <button id="hostBtn" class="btn mt-4">Host on projector</button>
+    </div>
+  </div>
+</main>
+
+<!-- HOST (projector) -->
+<main id="host" class="view hidden p-3">
+  <div class="panel absolute top-3 left-3 px-4 py-2">
+    <div class="text-slate-400 text-sm">Join at <span id="hurl" class="text-slate-200 font-semibold"></span> with code</div>
+    <div id="hcode" class="text-6xl font-extrabold tracking-widest text-amber-400 leading-none"></div>
+  </div>
+  <div class="panel absolute top-3 right-3 px-4 py-2 text-right">
+    <div id="hphase" class="text-slate-300 text-sm"></div>
+    <div id="htime" class="text-5xl font-extrabold tabular-nums">5:00</div>
+    <button id="startBtn" class="btn mt-1">Start the game</button>
+  </div>
+  <section class="panel absolute left-3 top-36 bottom-3 w-80 p-3 flex flex-col">
+    <h2 class="font-bold text-lg mb-2">Leaderboard <span id="hn" class="text-slate-400 font-normal text-sm"></span></h2>
+    <div id="rows" class="space-y-1.5 overflow-y-auto"></div>
+  </section>
+  <section id="spec" class="panel absolute right-3 top-36 w-72 p-3 text-slate-400">Click a city to watch it live.</section>
+</main>
+
+<!-- PLAYER -->
+<main id="player" class="view hidden">
+  <div class="panel absolute top-3 left-3 w-64 p-3">
+    <div id="pname" class="text-lg font-extrabold leading-tight"></div>
+    <div id="plvl" class="text-xs text-amber-400 mb-2"></div>
+    <div id="pgauges" class="space-y-1.5"></div>
+    <div class="flex justify-between mt-2 text-sm"><span class="font-extrabold text-amber-400">💵 <span id="pmoney"></span></span><span class="text-slate-300">👥 <span id="ppop"></span></span></div>
+  </div>
+  <div class="panel absolute top-3 right-3 px-4 py-2 text-right">
+    <div id="ptime" class="text-3xl font-extrabold tabular-nums"></div>
+    <div class="text-amber-400 font-extrabold text-xl"><span id="pscore">0</span> pts</div>
+    <div id="prank" class="text-slate-400 text-xs"></div>
+  </div>
+  <div id="pwait" class="panel absolute bottom-6 left-1/2 -translate-x-1/2 px-5 py-3">Waiting for the host to start…</div>
+  <div id="hint" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 text-slate-200 text-sm drop-shadow text-center">Click a building to upgrade it · hover to see what it does</div>
+  <div id="modal" class="hidden panel absolute bottom-4 left-1/2 -translate-x-1/2 p-4 w-[min(94vw,30rem)]" style="border-color:#E4572E">
+    <h2 id="mtitle" class="text-xl font-extrabold text-orange-400"></h2>
+    <p id="mdesc" class="text-slate-300 text-sm"></p>
+    <div class="h-2 bg-slate-700 rounded mt-2"><div id="mbar" class="h-2 rounded bg-orange-500" style="width:100%"></div></div>
+    <div id="mopts" class="space-y-2 mt-3"></div>
+  </div>
+</main>
+
+<div id="end" class="hidden fixed inset-0 bg-[#0F1B2D] z-50 flex items-center justify-center p-6 text-center">
+  <div><div class="text-slate-400">Time's up</div><div id="endrank" class="text-7xl font-extrabold text-amber-400 my-2"></div>
+  <div id="endscore" class="text-2xl"></div><p class="text-slate-400 mt-4">Look at the projector for the final ranking.</p></div>
+</div>
+<div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-100 text-slate-900 font-semibold px-4 py-2 rounded-full opacity-0 transition-opacity z-[60]"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const socket = io(), qs = new URLSearchParams(location.search), T = THREE;
+const KEYS = ['apt', 'office', 'school', 'tax', 'solar', 'water', 'metro'];
+const STATS = [['air', 'Air'], ['water', 'Water'], ['edu', 'Education'], ['eq', 'Equality'], ['infra', 'Infrastructure']];
+const NM = { air: 'Air', water: 'Water', edu: 'Edu', eq: 'Equality', infra: 'Infra', pop: 'Pop' };
+const col = (v) => (v < 30 ? 'bg-red-500' : v < 55 ? 'bg-amber-400' : 'bg-teal-400');
+const gauge = (l, v) => `<div><div class="flex justify-between text-xs"><span>${l}</span><b>${Math.round(v)}</b></div><div class="h-2 bg-slate-700 rounded"><div class="h-2 rounded ${col(v)} transition-all duration-700" style="width:${v}%"></div></div></div>`;
+const fmt = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+const fx1 = (s, v) => (s === 'money' ? '💵 ' + (v > 0 ? '+' : '-') + '$' + Math.abs(v) : NM[s] + ' ' + (v > 0 ? '+' : '') + v + (s === 'pop' ? '%' : ''));
+const fxH = (fx) => Object.entries(fx).map(([s, v]) => `<span class="${v > 0 ? 'g' : 'r'}">${fx1(s, v)}</span>`).join(' · ');
+const cv = $('#c');
+const show = (v) => { ['entry', 'host', 'player'].forEach((x) => $('#' + x).classList.toggle('hidden', x !== v)); cv.style.display = v === 'entry' ? 'none' : 'block'; $('#labels').style.display = v === 'player' ? 'block' : 'none'; if (v !== 'player') $('#tip').style.display = 'none'; };
+let BD = null, role = null, spectate = null, lastBoard = null, evDeadline = 0, evTotal = 14000, evId = null, myMoney = 0, running = false, st = null, hover = null;
+const nxAt = {};
+const setBD = (bd) => { if (BD) return; BD = bd; BLD.forEach((b) => (b.nEl.textContent = BD[b.k].name)); };
+function toast(t) { const e = $('#toast'); e.textContent = t; e.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => (e.style.opacity = 0), 2200); }
+socket.on('toast', toast);
+
+/* ---------- feedback: decisions (centre) and building clocks (above the building) ---------- */
+socket.on('impact', (fx) => {
+  for (const k in fx) {
+    if (!fx[k]) continue;
+    const el = document.createElement('div'); el.className = 'chip ' + (fx[k] > 0 ? 'up' : 'down'); el.textContent = fx1(k, fx[k]);
+    $('#chips').appendChild(el); setTimeout(() => el.remove(), 2400);
+  }
+});
+socket.on('bt', (d) => {
+  if (role !== 'player' || !BD) return;
+  const b = BLD.find((x) => x.k === d.k), el = document.createElement('div'); el.className = 'pop';
+  el.style.left = b.el.style.left; el.style.top = parseFloat(b.el.style.top) - 75 + 'px';
+  el.innerHTML = fxH(d.fx).replace(/ · /g, ' '); document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
+});
+
+/* ---------- 3D CITY ---------- */
+const R = new T.WebGLRenderer({ canvas: cv, antialias: true });
+R.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+R.shadowMap.enabled = true; R.shadowMap.type = T.PCFSoftShadowMap; R.toneMapping = T.ACESFilmicToneMapping; R.toneMappingExposure = 1.15;
+const S = new T.Scene(); S.background = new T.Color(0x87c6f0); S.fog = new T.FogExp2(0x87c6f0, 0.008);
+const cam = new T.PerspectiveCamera(45, 1, 0.1, 400);
+const resize = () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); };
+addEventListener('resize', resize); resize();
+const hemi = new T.HemisphereLight(0xdfeaff, 0x556644, 0.75); S.add(hemi);
+const sun = new T.DirectionalLight(0xfff1d6, 1.0); sun.position.set(30, 50, 20); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
+Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 140 }); sun.shadow.camera.updateProjectionMatrix(); S.add(sun);
+const mat = (c) => new T.MeshLambertMaterial({ color: c });
+const sh = (m, x, y, z) => { m.castShadow = m.receiveShadow = true; m.position.set(x, y, z); return m; };
+function wtex(base, lit, cols, rows) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = base; g.fillRect(0, 0, 128, 128);
+  const w = 128 / cols, h = 128 / rows;
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) { g.fillStyle = (i * 7 + j * 13) % 5 ? lit : '#2a3548'; g.fillRect(i * w + w * 0.22, j * h + h * 0.2, w * 0.56, h * 0.55); }
+  return new T.CanvasTexture(c);
+}
+const box = (w, h, d, c, x, y, z, tex) => sh(new T.Mesh(new T.BoxGeometry(w, h, d), tex ? new T.MeshLambertMaterial({ map: tex }) : mat(c)), x, y, z);
+const cyl = (rt, rb, h, c, x, y, z, n = 16) => sh(new T.Mesh(new T.CylinderGeometry(rt, rb, h, n), mat(c)), x, y, z);
+const cone = (r, h, c, x, y, z, n = 4) => { const m = sh(new T.Mesh(new T.ConeGeometry(r, h, n), mat(c)), x, y, z); m.rotation.y = Math.PI / 4; return m; };
+const gtex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#5a9a50'; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${40 + Math.random() * 50 | 0},${110 + Math.random() * 60 | 0},${40 + Math.random() * 30 | 0},.5)`; g.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+  const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(40, 40); return t; })();
+const groundMat = new T.MeshLambertMaterial({ map: gtex });
+const ground = new T.Mesh(new T.PlaneGeometry(220, 220), groundMat); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; S.add(ground);
+const BPOS = {}; KEYS.forEach((k, i) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / 7; BPOS[k] = [Math.cos(a) * 14, Math.sin(a) * 14]; });
+const ring = new T.Mesh(new T.RingGeometry(7.4, 9.6, 64), mat(0x2a2f3a)); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; ring.receiveShadow = true; S.add(ring);
+for (const k in BPOS) { const [x, z] = BPOS[k]; const rd = box(Math.hypot(x, z), 0.05, 1.8, 0x2a2f3a, x / 2, 0.02, z / 2); rd.rotation.y = -Math.atan2(z, x); S.add(rd); }
+let waterM = null;
+// each building is rebuilt bigger at every level
+const BUILD = {
+  apt: (lv) => { const a = []; for (let i = 0; i < lv; i++) { const h = 3.5 + i * 1.4 + lv * 1.1; a.push(box(2.6, h, 3, 0, (i - (lv - 1) / 2) * 3.1, h / 2, 0, wtex('#c9b79c', '#ffe9a8', 4, Math.round(h * 1.2)))); } return a; },
+  office: (lv) => { const h = 5 + lv * 3, a = [box(3.6, h, 3.6, 0, 0, h / 2, 0, wtex('#1f3b63', '#9fd0ff', 5, Math.round(h * 1.3))), cyl(0.08, 0.08, 2, 0xcccccc, 0, h + 1, 0, 6)]; if (lv >= 3) a.push(box(2.4, h * 0.6, 2.4, 0, 3.4, h * 0.3, 1, wtex('#1f3b63', '#9fd0ff', 3, 6))); return a; },
+  school: (lv) => { const w = 4 + lv * 1.1, h = 2.2 + lv * 0.5, a = [box(w, h, 4, 0xc9573a, 0, h / 2, 0), box(w * 0.9, 0.3, 4.2, 0x8a3a26, 0, h + 0.15, 0), box(0.1, 2.4, 0.1, 0xeeeeee, -w / 2 + 0.6, h + 1.2, 1.5), box(1.1, 0.7, 0.1, 0x2dd4bf, -w / 2 + 1.2, h + 2.1, 1.5)]; if (lv >= 3) a.push(box(2, h + 1, 3, 0xb04a31, w / 2 + 1, (h + 1) / 2, 0)); else a.push(cone(3.2, 1.6, 0x7a2e1d, 0, h + 1, 0)); return a; },
+  tax: (lv) => { const h = 3 + lv * 0.6, a = [box(5, h, 4, 0xd9a441, 0, h / 2, 0), cone(3.6, 1.4, 0x8a6414, 0, h + 0.7, 0)]; if (lv >= 2) for (const x of [-2, -0.7, 0.7, 2]) a.push(cyl(0.25, 0.25, h, 0xf3e3b0, x, h / 2, 2.2, 8)); if (lv >= 3) a.push(sh(new T.Mesh(new T.SphereGeometry(1.3, 12, 8), mat(0xf2c94c)), 0, h + 2, 0)); return a; },
+  solar: (lv) => { const n = 2 + lv * 2, a = []; for (let i = 0; i < n; i++) { const p = box(2.8, 0.18, 1.7, 0x1e40af, (i >> 1) * 3.1 - (n / 4 - 0.5) * 3.1, 1.2, (i & 1) * 2.4 - 1.2); p.rotation.x = -0.5; a.push(p, box(0.15, 1.2, 0.15, 0x888888, p.position.x, 0.6, p.position.z)); } return a; },
+  water: (lv) => { const r = 1.5 + lv * 0.25, th = 2.8 + lv * 0.7, a = [cyl(r, r, 2.6, 0x243a5e, 0, th + 1.3, 0)]; waterM = cyl(r - 0.15, r - 0.15, 2.4, 0x34b6a6, 0, th + 1.3, 0); waterM.userData.b = th; a.push(waterM);
+    for (const [x, z] of [[-1, -1], [1, 1], [-1, 1], [1, -1]]) a.push(box(0.3, th, 0.3, 0x9fb6d6, x * r * 0.6, th / 2, z * r * 0.6)); if (lv >= 3) a.push(cyl(1.2, 1.2, 2, 0x243a5e, 4.5, 1.5, 0)); return a; },
+  metro: (lv) => [box(4 + lv, 2.6, 4.5, 0x3b4a63, 0, 1.3, 0), box(5 + lv, 0.4, 5.2, 0x9fb6d6, 0, 2.8, 0), box(1.6, 1.8, 0.2, 0xf2a33a, 0, 1, 2.3), box(14 + lv * 2, 0.1, 1.2, 0x1a1d24, 0, 0.06, -3.5), ...(lv >= 3 ? [box(4, 1.2, 1.1, 0xe4572e, 3, 0.8, -3.5)] : [])],
+};
+const grp = {}, shown = {};
+KEYS.forEach((k) => {
+  const g = new T.Group(); g.position.set(BPOS[k][0], 0, BPOS[k][1]); g.userData.k = k; g.userData.pop = 0;
+  const hit = new T.Mesh(new T.CylinderGeometry(4.2, 4.2, 10, 8), new T.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.y = 5; g.userData.hit = hit; g.add(hit);
+  S.add(g); grp[k] = g; shown[k] = 0;
+});
+function rebuild(k, lv) { const g = grp[k]; g.children.slice().forEach((c) => c !== g.userData.hit && g.remove(c)); BUILD[k](lv).forEach((m) => g.add(m)); if (shown[k]) g.userData.pop = 1; shown[k] = lv; }
+const rr = (i) => { const s = Math.sin(i * 127.1) * 43758.5453; return s - Math.floor(s); };
+const houses = [];
+for (let i = 0; i < 40; i++) {
+  const g = new T.Group(), a = i * 2.39996, r = 20 + 10 * Math.sqrt(i / 40), body = box(2.4, 1.8, 2.4, 0xd8c7a0, 0, 0.9, 0);
+  g.add(body, cone(2, 1.2, 0x8a3f2b, 0, 2.4, 0)); g.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); g.userData.body = body; S.add(g); houses.push(g);
+}
+for (let i = 0; i < 80; i++) { const a = rr(i) * 6.283, r = 24 + rr(i + 80) * 28, g = new T.Group(); g.add(cyl(0.2, 0.25, 1.2, 0x6b4a2b, 0, 0.6, 0, 6), sh(new T.Mesh(new T.ConeGeometry(1.2 + rr(i + 160) * 0.5, 2.6, 7), mat(0x2f7d3a)), 0, 2.4, 0)); g.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); S.add(g); }
+const cars = [];
+for (let i = 0; i < 8; i++) { const c = box(1.5, 0.6, 0.8, 0xf2a33a, 0, 0.45, 0); S.add(c); cars.push(c); }
+// people: visible crowd that grows with the population and spills out when buildings are over capacity
+const NP = 300, PAL = [0xe4572e, 0x2dd4bf, 0xf2a33a, 0x6366f1, 0xec4899, 0xeeeeee, 0x22c55e], SKIN = [0xf1c27d, 0xc68642, 0x8d5524, 0xe0ac69];
+const bodyM = new T.InstancedMesh(new T.CylinderGeometry(0.2, 0.2, 0.7, 6), mat(0xffffff), NP), headM = new T.InstancedMesh(new T.SphereGeometry(0.17, 6, 6), mat(0xffffff), NP);
+for (let i = 0; i < NP; i++) { bodyM.setColorAt(i, new T.Color(PAL[i % 7])); headM.setColorAt(i, new T.Color(SKIN[(i * 3) % 4])); }
+bodyM.frustumCulled = headM.frustumCulled = false; bodyM.raycast = headM.raycast = () => {}; S.add(bodyM, headM);
+const dum = new T.Object3D(), CAPK = ['apt', 'school', 'office'];
+const overs = () => { const o = {}; CAPK.forEach((k) => (o[k] = Math.min(2, Math.max(0, cur.pop / BD[k].cap[(st.lv[k] || 1) - 1] - 1)))); return o; };
+function people(t, ov) {
+  const np = Math.min(NP, Math.round(cur.pop / 650)), spill = Math.min(1, Math.max(ov.apt, ov.school, ov.office)), q = CAPK.map((k) => Math.min(0.4, ov[k] * 0.3));
+  bodyM.count = headM.count = np;
+  for (let i = 0; i < np; i++) {
+    const a = rr(i), b = rr(i + 300), c = rr(i + 600), d = rr(i + 900); let x, z, qi = d < q[0] ? 0 : d < q[0] + q[1] ? 1 : d < q[0] + q[1] + q[2] ? 2 : -1;
+    if (qi >= 0) { const [bx, bz] = BPOS[CAPK[qi]], ang = a * 6.283 + t * 0.3 * (b - 0.5), rad = 4.6 + c * (1.5 + ov[CAPK[qi]] * 3); x = bx + Math.cos(ang) * rad; z = bz + Math.sin(ang) * rad; }
+    else if (i % 3 === 0) { const ang = a * 6.283 + t * 0.12 * (b > 0.5 ? 1 : -1) * (0.5 + b), rad = 8.5 + (c - 0.5) * (1.8 + spill * 7); x = Math.cos(ang) * rad; z = Math.sin(ang) * rad; }
+    else { const [bx, bz] = BPOS[KEYS[Math.floor(b * 7)]], s = (a + t * 0.04 * (c > 0.5 ? 1 : -1) + 10) % 1, o = (c - 0.5) * (1.6 + spill * 5); x = bx * s - bz * 0.07 * o; z = bz * s + bx * 0.07 * o; }
+    const y = 0.35 + Math.abs(Math.sin(t * 5 + i)) * 0.05; dum.position.set(x, y, z); dum.updateMatrix(); bodyM.setMatrixAt(i, dum.matrix); dum.position.y = y + 0.5; dum.updateMatrix(); headM.setMatrixAt(i, dum.matrix);
+  }
+  bodyM.instanceMatrix.needsUpdate = headM.instanceMatrix.needsUpdate = true; bodyM.instanceColor.needsUpdate = headM.instanceColor.needsUpdate = true;
+}
+// effects (only the human-made emergencies now)
+const N = 500, pos = new Float32Array(N * 3), pg = new T.BufferGeometry(); pg.setAttribute('position', new T.BufferAttribute(pos, 3));
+const pmat = new T.PointsMaterial({ size: 0.3, transparent: true, depthWrite: false }), pts = new T.Points(pg, pmat); pts.frustumCulled = false; pts.raycast = () => {}; S.add(pts);
+const PSET = { dry: [0xd9a35a, 0.35], smog: [0x6b5d4a, 0.8], storm: [0x9fc4ff, 0.22], soot: [0x222222, 0.7], crowd: [0xff7ab6, 0.5], pulse: [0xc58bff, 0.55] };
+const EFK = { water: 'dry', smog: 'smog', infra: 'storm', school: 'crowd', migration: 'crowd', gender: 'pulse', factory: 'soot', fire: 'soot' };
+const EVB = { smog: 'solar', water: 'water', school: 'school', infra: 'metro', gender: 'school', factory: 'office', migration: 'apt', fire: 'apt' };
+const EC = { dry: new T.Color(0xd99a4a), smog: new T.Color(0x8b7d6b), storm: new T.Color(0x2c3a52), soot: new T.Color(0x3a3030) };
+const TINT = { dry: 'rgba(255,125,20,.38)', smog: 'rgba(110,80,40,.35)', storm: 'rgba(10,20,50,.4)', soot: 'rgba(20,10,10,.3)' };
+function particles(type, t, F) {
+  pts.visible = !!type; if (!type) return;
+  pmat.color.setHex(PSET[type][0]); pmat.size = PSET[type][1]; pmat.opacity = eff.k;
+  for (let i = 0; i < N; i++) {
+    const a = rr(i), b = rr(i + 500), c = rr(i + 999); let x, y, z;
+    if (type === 'dry') { x = ((a * 80 + t * 6) % 80) - 40; y = 1 + b * 10; z = (c - 0.5) * 60 + Math.sin(t + i) * 1.5; }
+    else if (type === 'smog') { x = (a - 0.5) * 60; y = (b * 14 + t * 0.8) % 14; z = (c - 0.5) * 60; }
+    else if (type === 'storm') { x = (a - 0.5) * 70; y = 22 - ((b * 22 + t * 30) % 22); z = (c - 0.5) * 70; }
+    else if (type === 'soot') { x = F[0] - 6 + (i % 5) * 3 + Math.sin(t + i) * 0.8; y = (b * 18 + t * 4) % 18; z = F[1] + Math.cos(t * 0.7 + i); }
+    else if (type === 'crowd') { const ang = t * 0.8 + a * 6.28, rad = 4 + c * 6; x = F[0] + Math.cos(ang) * rad; y = 0.4; z = F[1] + Math.sin(ang) * rad; }
+    else { const rad = (t * 5 + (i % 5)) % 12, ang = a * 6.28; x = F[0] + Math.cos(ang) * rad; y = 0.5 + b * 0.3; z = F[1] + Math.sin(ang) * rad; }
+    pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+  }
+  pg.attributes.position.needsUpdate = true;
+}
+const eff = { type: null, k: 0 }, cur = { air: 80, water: 80, edu: 50, eq: 50, infra: 60, pop: 10000 }, sky = new T.Color(), TAN = new T.Color(0xd9b070), WHITE = new T.Color(0xffffff);
+let phase = 0, last = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!role || !st || !BD) return;
+  const dt = Math.min(0.05, (now - last) / 1000), t = now / 1000; last = now;
+  for (const k in cur) cur[k] += (st[k] - cur[k]) * Math.min(1, dt * 3);
+  KEYS.forEach((k) => { const lv = (st.lv && st.lv[k]) || 1; if (shown[k] !== lv) rebuild(k, lv); });
+  const kind = EFK[st.evId] || null;
+  if (kind) { eff.type = kind; eff.k = Math.min(1, eff.k + dt * 1.2); } else { eff.k = Math.max(0, eff.k - dt * 0.5); if (!eff.k) eff.type = null; }
+  const tp = eff.type, e = eff.k, sm = (100 - cur.air) / 100, dry = Math.max(((100 - cur.water) / 100) * 0.6, tp === 'dry' ? e : 0);
+  sky.setHex(0x87c6f0).lerp(EC.smog, sm * 0.8); if (tp && EC[tp]) sky.lerp(EC[tp], e * 0.7);
+  S.background.copy(sky); S.fog.color.copy(sky); S.fog.density = 0.008 + 0.03 * sm + (tp === 'smog' || tp === 'soot' ? 0.02 * e : 0);
+  groundMat.color.copy(WHITE).lerp(TAN, dry);
+  hemi.intensity = 0.75 + (tp === 'storm' && Math.random() < 0.03 ? 1.2 : 0);
+  const tn = $('#tint'); tn.style.background = TINT[tp] || 'transparent'; tn.style.opacity = e * (tp === 'storm' && Math.random() < 0.05 ? 1 : 0.8);
+  const nH = Math.min(40, 4 + Math.floor(Math.log2(Math.max(1, cur.pop / 10000)) * 8));
+  houses.forEach((h, i) => { h.visible = i < nH; h.userData.body.material.color.setHex(cur.air > 50 ? 0xd8c7a0 : 0x8f8878); });
+  if (waterM) { const w = Math.max(0.05, cur.water / 100); waterM.scale.y = w; waterM.position.y = waterM.userData.b + 0.1 + 1.2 * w; }
+  const jam = cur.infra < 40, vis = Math.min(8, 3 + Math.round((100 - cur.infra) / 14)); phase += dt * (jam ? 0.15 : 0.9);
+  cars.forEach((c, i) => { c.visible = i < vis; const a = phase + i * 0.8; c.position.set(Math.cos(a) * 8.5, 0.45, Math.sin(a) * 8.5); c.rotation.y = -(a + Math.PI / 2); c.material.color.setHex(jam ? 0xe4572e : 0xf2a33a); });
+  const ov = overs(), hotK = EVB[st.evId];
+  KEYS.forEach((k) => { const g = grp[k]; g.userData.pop = Math.max(0, g.userData.pop - dt * 2); g.scale.setScalar(1 + g.userData.pop * 0.3 + (k === hotK || ov[k] > 0 ? 0.04 * Math.sin(t * 8) : 0)); });
+  people(t, ov); particles(tp, t, BPOS[EVB[st.evId] || 'apt'] || BPOS.apt);
+  const ang = 0.8 + Math.sin(t * 0.08) * 0.12;
+  cam.position.set(Math.cos(ang) * 52, 34, Math.sin(ang) * 52); cam.lookAt(0, 1, 0);
+  if (role === 'player') BLD.forEach((b) => {
+    const v = b.v.clone().project(cam); b.el.style.left = ((v.x * 0.5 + 0.5) * innerWidth) + 'px'; b.el.style.top = ((-v.y * 0.5 + 0.5) * innerHeight) + 'px';
+    const left = Math.max(0, (nxAt[b.k] || 0) - Date.now()), per = BD[b.k].period * 1000;
+    b.uEl.style.width = (100 - (left / per) * 100) + '%'; b.tEl.textContent = '⏱ ' + Math.ceil(left / 1000) + 's';
+  });
+  if (hover) placeTip();
+  R.render(S, cam);
+}
+requestAnimationFrame(frame);
+
+/* ---------- building labels, tooltip, clicks ---------- */
+const BLD = KEYS.map((k) => {
+  const el = document.createElement('button'); el.className = 'lbl'; el.dataset.k = k;
+  el.innerHTML = '<b><span class="n"></span> <em></em></b><i><u></u></i><span class="t"></span> · <span class="c"></span><div class="ld"></div>'; $('#labels').appendChild(el);
+  return { k, el, nEl: el.querySelector('.n'), lEl: el.querySelector('em'), uEl: el.querySelector('u'), tEl: el.querySelector('.t'), cEl: el.querySelector('.c'), ldEl: el.querySelector('.ld'), v: new T.Vector3(BPOS[k][0], [9, 13, 8, 8, 4, 9, 5][KEYS.indexOf(k)], BPOS[k][1]) };
+});
+const tip = $('#tip'); let mx = 0, my = 0;
+function tipHTML(k) {
+  const d = BD[k], lv = (st.lv && st.lv[k]) || 1;
+  let h = `<b>${d.name}</b> <span class="text-slate-400">Level ${lv}/4</span><div class="text-xs mt-1">Every ${d.period}s: ${fxH(d.fx[lv - 1])}</div>`;
+  if (d.cap) h += `<div class="text-xs mt-1">Serves ${d.cap[lv - 1].toLocaleString()} people · city has ${st.pop.toLocaleString()} (${Math.round((st.pop / d.cap[lv - 1]) * 100)}%)</div>`;
+  h += lv < 4 ? `<div class="text-xs mt-1 text-amber-300">Upgrade cost: 💵 $${d.cost[lv - 1]}</div><div class="text-xs">Level ${lv + 1}: ${fxH(d.fx[lv])}${d.cap ? ' · serves ' + d.cap[lv].toLocaleString() : ''}</div>` : '<div class="text-xs mt-1 text-amber-300">MAX LEVEL</div>';
+  return h;
+}
+function placeTip() { tip.style.left = Math.min(innerWidth - 290, mx + 16) + 'px'; tip.style.top = Math.min(innerHeight - 170, my + 16) + 'px'; }
+function setHover(k) { if (k === hover) return; hover = k; if (!k || !st || !BD || role !== 'player') { tip.style.display = 'none'; hover = null; return; } tip.innerHTML = tipHTML(k); tip.style.display = 'block'; placeTip(); }
+addEventListener('pointermove', (e) => { mx = e.clientX; my = e.clientY; });
+$('#labels').addEventListener('pointerover', (e) => { const b = e.target.closest('[data-k]'); setHover(b ? b.dataset.k : null); });
+$('#labels').addEventListener('pointerout', (e) => { if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('[data-k]')) setHover(null); });
+const ray = new T.Raycaster(), mv = new T.Vector2(), owner = (o) => { while (o && !o.userData.k) o = o.parent; return o; };
+function pick(e) { mv.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); ray.setFromCamera(mv, cam); const h = ray.intersectObjects(KEYS.map((k) => grp[k]), true).find((x) => owner(x.object)); return h ? owner(h.object).userData.k : null; }
+cv.addEventListener('pointermove', (e) => { if (role === 'player' && BD) setHover(pick(e)); });
+cv.addEventListener('pointerdown', (e) => { if (role !== 'player' || !running) return; const k = pick(e); if (k) socket.emit('player:upgrade', k); });
+$('#labels').addEventListener('pointerdown', (e) => { const b = e.target.closest('[data-k]'); if (b && running) socket.emit('player:upgrade', b.dataset.k); });
+
+/* ---------- connection / auto rejoin ---------- */
+socket.on('connect', () => { if (role === 'host') startHost(); else if (role === 'player') joinGame(sessionStorage.jc, sessionStorage.jn, true); });
+if (qs.has('host')) startHost();
+if (qs.get('room')) $('#jcode').value = qs.get('room').toUpperCase();
+
+/* ---------- HOST ---------- */
+$('#hostBtn').onclick = startHost;
+function startHost() {
+  socket.emit('host:create', { code: sessionStorage.hostCode }, (r) => {
+    role = 'host'; sessionStorage.hostCode = r.code; setBD(r.bd);
+    $('#hcode').textContent = r.code; $('#hurl').textContent = location.host + '/?room=' + r.code; show('host');
+  });
+}
+$('#startBtn').onclick = () => socket.emit('host:start');
+socket.on('board', (b) => { if (role !== 'host') return; lastBoard = b; renderHost(); });
+function renderHost() {
+  const b = lastBoard;
+  if (!spectate && b.board.length) spectate = b.board[0].id;
+  $('#hphase').textContent = b.phase === 'lobby' ? 'Waiting for players' : b.phase === 'running' ? 'Game in progress' : 'Final results';
+  $('#htime').textContent = fmt(b.left);
+  $('#startBtn').classList.toggle('hidden', b.phase !== 'lobby'); $('#startBtn').disabled = b.board.length === 0;
+  $('#hn').textContent = b.board.length + ' cities';
+  $('#rows').innerHTML = b.board.map((p, i) => `
+    <button data-id="${esc(p.id)}" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left ${spectate === p.id ? 'bg-[#2F4C7C]' : 'bg-[#1E3354] hover:bg-[#25406A]'}">
+      <span class="w-6 text-slate-400 font-bold">${i + 1}</span>
+      <span class="flex-1 font-semibold truncate ${p.connected ? '' : 'opacity-50'}">${esc(p.name)}${p.ev ? ' <span class="text-orange-400 text-xs">⚠</span>' : ''}</span>
+      <span class="text-lg font-extrabold text-amber-400 tabular-nums">${p.score.toFixed(1)}</span></button>`).join('');
+  document.querySelectorAll('#rows button').forEach((el) => (el.onclick = () => { spectate = el.dataset.id; renderHost(); }));
+  const p = b.board.find((x) => x.id === spectate);
+  if (p) {
+    st = p;
+    $('#spec').innerHTML = `<div class="flex justify-between mb-2"><b class="text-lg text-white">${esc(p.name)}</b><span class="text-amber-400 font-extrabold text-lg">${p.score.toFixed(1)}</span></div>
+      <div class="space-y-1.5 text-slate-200">${STATS.map(([k, l]) => gauge(l, p[k])).join('')}</div>
+      <div class="flex justify-between mt-2 text-sm text-slate-200"><span>💵 <b class="text-amber-400">$${p.money}</b></span><span>👥 ${p.pop.toLocaleString()}</span></div>
+      <div class="mt-2 text-xs text-slate-300">${KEYS.map((k) => BD[k].name.split(' ')[0] + ' <b>L' + p.lv[k] + '</b>').join(' · ')}</div>
+      ${p.ev ? `<div class="mt-2 p-2 rounded-lg bg-orange-900/60 text-orange-300 font-semibold text-sm">⚠ ${esc(p.ev)}</div>` : ''}`;
+  }
+}
+
+/* ---------- PLAYER ---------- */
+$('#joinForm').onsubmit = (e) => { e.preventDefault(); joinGame($('#jcode').value, $('#jname').value, false); };
+function joinGame(code, name, silent) {
+  socket.emit('player:join', { code, name }, (r) => {
+    if (r.error) { if (!silent) $('#jerr').textContent = r.error; else { role = null; show('entry'); } return; }
+    role = 'player'; sessionStorage.jc = code; sessionStorage.jn = name; setBD(r.bd); show('player');
+  });
+}
+socket.on('me', (d) => {
+  if (role !== 'player' || !BD) return;
+  const m = d.me; myMoney = m.money; running = d.phase === 'running'; st = m;
+  KEYS.forEach((k) => (nxAt[k] = Date.now() + d.nx[k]));
+  $('#pname').textContent = m.name;
+  $('#plvl').textContent = running ? 'Level ' + d.lvl + ' · ' + ['Calm', 'Pressure', 'Crisis'][d.lvl - 1] : 'Get ready';
+  $('#pgauges').innerHTML = STATS.map(([k, l]) => gauge(l, m[k])).join('');
+  $('#pmoney').textContent = '$' + m.money; $('#ppop').textContent = m.pop.toLocaleString();
+  $('#pscore').textContent = m.score.toFixed(1); $('#prank').textContent = 'Rank ' + d.rank + ' of ' + d.n; $('#ptime').textContent = fmt(d.left);
+  $('#pwait').classList.toggle('hidden', d.phase !== 'lobby'); $('#hint').classList.toggle('hidden', !running || !!d.event);
+  const hotK = EVB[m.evId];
+  BLD.forEach((b) => {
+    const dd = BD[b.k], lv = m.lv[b.k], cost = lv < 4 ? dd.cost[lv - 1] : 0, load = dd.cap ? m.pop / dd.cap[lv - 1] : 0;
+    b.lEl.textContent = 'Lv ' + lv; b.cEl.textContent = lv < 4 ? '⬆ $' + cost : 'MAX';
+    b.el.classList.toggle('max', lv >= 4); b.el.classList.toggle('dim', running && lv < 4 && myMoney < cost);
+    b.el.classList.toggle('hot', b.k === hotK || load > 1);
+    b.ldEl.style.display = dd.cap ? 'block' : 'none'; b.ldEl.className = 'ld' + (load > 1 ? ' bad' : '');
+    if (dd.cap) b.ldEl.textContent = '👥 ' + Math.round(load * 100) + '%' + (load > 1 ? ' FULL' : '');
+  });
+  if (hover) tip.innerHTML = tipHTML(hover);
+  if (d.event && running) {
+    if (evId !== d.event.id) {
+      evId = d.event.id; evTotal = d.event.total;
+      $('#mtitle').textContent = d.event.title; $('#mdesc').textContent = d.event.desc;
+      $('#mopts').innerHTML = d.event.options.map((o, i) => `<button class="opt" data-i="${i}" data-c="${o.cost}"><div class="font-bold">${esc(o.label)}</div><div class="text-xs mt-0.5">${fxH(o.fx)}</div></button>`).join('');
+      document.querySelectorAll('#mopts button').forEach((b) => (b.onclick = () => socket.emit('player:choose', b.dataset.i)));
+    }
+    evDeadline = Date.now() + d.event.ms;
+    document.querySelectorAll('#mopts button').forEach((b) => (b.disabled = myMoney < Math.max(0, +b.dataset.c)));
+    $('#modal').classList.remove('hidden');
+  } else { evId = null; $('#modal').classList.add('hidden'); }
+  if (d.phase === 'ended') {
+    $('#modal').classList.add('hidden');
+    $('#endrank').textContent = '#' + d.rank + ' of ' + d.n; $('#endscore').textContent = 'Final score ' + m.score.toFixed(1) + ' / 100';
+    $('#end').classList.remove('hidden');
+  }
+});
+setInterval(() => { if (evId) $('#mbar').style.width = Math.max(0, Math.min(100, ((evDeadline - Date.now()) / evTotal) * 100)) + '%'; }, 100);
+</script>
+</body>
+</html>
